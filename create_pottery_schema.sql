@@ -100,7 +100,6 @@ CREATE TABLE stories (
   myth_id          INT UNSIGNED NOT NULL,
   parent_story_id  INT UNSIGNED NULL,    -- Trojan War -> Death of Hector -> scene
   name             VARCHAR(200) NOT NULL,
-  literary_source  VARCHAR(200) NULL,    -- Iliad 22, Aethiopis, Little Iliad, etc.
   PRIMARY KEY (story_id),
   KEY ix_stories_myth (myth_id),
   KEY ix_stories_parent (parent_story_id),
@@ -110,14 +109,45 @@ CREATE TABLE stories (
     REFERENCES stories (story_id) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE literary_sources (
+  source_id  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  title      VARCHAR(200) NOT NULL,      -- Iliad, Aethiopis, Little Iliad
+  author     VARCHAR(150) NULL,          -- NULL if lost or anonymous
+  PRIMARY KEY (source_id),
+  UNIQUE KEY uq_source (title, author)
+) ENGINE=InnoDB;
+
+CREATE TABLE story_sources (
+  story_id   INT UNSIGNED NOT NULL,
+  source_id  INT UNSIGNED NOT NULL,
+  passage    VARCHAR(100) NULL,          -- e.g. 22.131-366
+  PRIMARY KEY (story_id, source_id),
+  KEY ix_ss_source (source_id),
+  CONSTRAINT fk_ss_story FOREIGN KEY (story_id)
+    REFERENCES stories (story_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_ss_source FOREIGN KEY (source_id)
+    REFERENCES literary_sources (source_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE characters (
   character_id    INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name            VARCHAR(120) NOT NULL,
-  alt_spellings   VARCHAR(255) NULL,     -- Achilleus; Achilles
-  type            VARCHAR(60)  NULL,     -- hero, god, mortal, monster
+  type           VARCHAR(60)  NULL,     -- hero, god, mortal, monster
   side            ENUM('greek','trojan','divine','other') NOT NULL DEFAULT 'other',
   PRIMARY KEY (character_id),
   KEY ix_characters_name (name)
+) ENGINE=InnoDB;
+
+CREATE TABLE character_aliases (
+  alias_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  character_id  INT UNSIGNED NOT NULL,
+  alias         VARCHAR(120) NOT NULL,   -- Achilleus, Achilles
+  language      VARCHAR(40)  NULL,       -- greek, latin, english
+  PRIMARY KEY (alias_id),
+  UNIQUE KEY uq_alias (character_id, alias),
+  KEY ix_alias_text (alias),
+  CONSTRAINT fk_alias_character FOREIGN KEY (character_id)
+    REFERENCES characters (character_id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE artists (
@@ -146,7 +176,6 @@ CREATE TABLE vessels (
   vessel_name            VARCHAR(200) NULL,
   date_start             SMALLINT NULL,
   date_end               SMALLINT NULL,
-  period_label           ENUM('geometric','archaic','classical','hellenistic','roman') NULL,
   dating_basis           VARCHAR(255) NULL,
   vessel_description     TEXT NULL,
   review_status          ENUM('unreviewed','verified','flagged') NOT NULL DEFAULT 'unreviewed',
@@ -185,6 +214,7 @@ CREATE TABLE depictions (
   confidence          DECIMAL(3,2) NULL,  -- 0.00 to 1.00
   review_status       ENUM('unreviewed','verified','flagged') NOT NULL DEFAULT 'unreviewed',
   PRIMARY KEY (depiction_id),
+  UNIQUE KEY uq_depictions_id_vessel (depiction_id, vessel_id),  -- target for images composite FK
   KEY ix_depictions_vessel (vessel_id),
   KEY ix_depictions_story (story_id),
   CONSTRAINT chk_depictions_conf CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
@@ -208,8 +238,10 @@ CREATE TABLE images (
   KEY ix_images_depiction (depiction_id),
   CONSTRAINT fk_images_vessel FOREIGN KEY (vessel_id)
     REFERENCES vessels (vessel_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT fk_images_depiction FOREIGN KEY (depiction_id)
-    REFERENCES depictions (depiction_id) ON DELETE SET NULL ON UPDATE CASCADE
+  -- Composite FK: an image's depiction must belong to the image's vessel.
+  -- Skipped when depiction_id is NULL (vessel-level image).
+  CONSTRAINT fk_images_depiction FOREIGN KEY (depiction_id, vessel_id)
+    REFERENCES depictions (depiction_id, vessel_id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE related_media (
@@ -285,4 +317,3 @@ CREATE TABLE archive_records (
   CONSTRAINT fk_ar_archive FOREIGN KEY (archive_id)
     REFERENCES archives (archive_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
-

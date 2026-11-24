@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Seed data for the archives table
--- Run after trojan_war_pottery_schema.sql
+-- Run after create_pottery_schema.sql
 -- license_terms are summaries, not legal text. Confirm each source's
 -- current terms before scraping, storing, or republishing anything.
 -- =====================================================================
